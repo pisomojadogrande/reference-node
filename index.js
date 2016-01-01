@@ -3,7 +3,7 @@ const exec = require('child_process');
 
 const port = 3000;
 
-const getMyContainerIdCommand = 'cat /proc/self/cgroup | sed \'s/^.*docker\///\' | tail -n 1'
+const getMyContainerIdCommand = 'cat /proc/self/cgroup | tail -n 1'
 const containerId = exec.execSync(getMyContainerIdCommand, {encoding: 'utf8'}) || 'unknown';
 console.log("Container id " + containerId);
 
