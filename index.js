@@ -3,8 +3,9 @@ const exec = require('child_process');
 
 const port = 3000;
 
-const getMyContainerIdCommand = 'cat /proc/self/cgroup'
-const containerId = exec.execSync(getMyContainerIdCommand, {encoding: 'utf8'}) || 'unknown';
+const getMyContainerIdCommand = 'cat /proc/self/cgroup | grep docker | tail -n 1'
+const commandOutput = exec.execSync(getMyContainerIdCommand, {encoding: 'utf8'}) || "1:blkio:/docker/UNKNOWN\n";
+const containerId = commandOutput.replace(/^.*docker\//, "").trim();
 console.log("Container id " + containerId);
 
 http.createServer(function(req, res) {
