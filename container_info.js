@@ -5,5 +5,7 @@ const commandOutput = exec.execSync(getMyContainerIdCommand, {encoding: 'utf8'})
 const myContainerId = commandOutput.replace(/^.*docker\//, "").trim();
 
 module.exports = {
-    containerId: myContainerId    
+    containerId: myContainerId,
+    
+    greetingString: "Hello from container " + myContainerId
 };
