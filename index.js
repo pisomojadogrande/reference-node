@@ -1,15 +1,12 @@
 const express = require('express');
 const app = express();
-const containerInfo = require('./container_info');
+const rootRouter = require('./root_router');
+const thingsRouter = require('./things_router');
 
 const port = 3000;
 
-console.log("Container id " + containerInfo.containerId);
-app.containerId = containerInfo.containerId;
-
-app.get('/', function(req, res) {
-  res.send("Hello from container " + app.containerId);
-});
+app.use('/', rootRouter);
+app.use('/things', thingsRouter);
 
 var server = app.listen(port, function() {
   var host = server.address().address;
