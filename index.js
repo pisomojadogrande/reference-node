@@ -1,17 +1,14 @@
 const express = require('express');
 const app = express();
-const exec = require('child_process');
+const containerInfo = require('./container_info');
 
 const port = 3000;
 
-const getMyContainerIdCommand = 'cat /proc/self/cgroup | grep docker | tail -n 1'
-const commandOutput = exec.execSync(getMyContainerIdCommand, {encoding: 'utf8'}) || "1:blkio:/docker/UNKNOWN\n";
-const containerId = commandOutput.replace(/^.*docker\//, "").trim();
-
-app.containerId = containerId;
+console.log("Container id " + containerInfo.containerId);
+app.containerId = containerInfo.containerId;
 
 app.get('/', function(req, res) {
-  res.send("Hello from container " + containerId);
+  res.send("Hello from container " + app.containerId);
 });
 
 var server = app.listen(port, function() {
