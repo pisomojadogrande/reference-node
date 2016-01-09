@@ -26,8 +26,7 @@ router.get('/me', function(req, res) {
     xForwardedFor = req.headers['X-Forwarded-For'];
     xForwardedProto = req.headers['X-Forwarded-Proto'];
     const response = containerInfo.greetingString +
-        '; you are ' + xForwardedFor +
-        '; proto ' + xForwardedProto;
+        '; your headers: ' + JSON.stringify(req.headers);
     res.send(response);
 })
 
