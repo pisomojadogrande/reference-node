@@ -12,6 +12,11 @@
       "Default": "",
       "Description": "If this and the HostedZoneName parameter are set, a DNS record will be created that is a CNAME to the ELB"
     },
+    "SSLCertificateARN": {
+      "Type": "String",
+      "Default": "",
+      "Description": "ARN of the server certificate in IAM matching your DNSName"
+    },
     "ServiceInstanceKeyName": {
       "Type": "String",
       "Default": "",
@@ -34,17 +39,14 @@
     }
   },
   "Conditions": {
-    "AreInstancesSSHable": {
-      "Fn::Not": [{
-        "Fn::Equals": [{"Ref": "ServiceInstanceKeyName"}, ""]  
-      }]
-    },
+    "AreInstancesSSHable": { "Fn::Not":[{"Fn::Equals": [{"Ref": "ServiceInstanceKeyName"}, ""]}]},
     "CreateDNSRecord": {
       "Fn::And": [
-        { "Fn::Not": [{"Fn::Equals": [{"Ref": "HostedZoneName"}, ""]}] },
-        { "Fn::Not": [{"Fn::Equals": [{"Ref": "DNSName"}, ""]}] }
+        { "Fn::Not":[{"Fn::Equals": [{"Ref": "HostedZoneName"}, ""]}] },
+        { "Fn::Not":[{"Fn::Equals": [{"Ref": "DNSName"}, ""]}] }
       ]
-    }
+    },
+    "SSL": { "Fn::Not":[{"Fn::Equals": [{"Ref": "SSLCertificateARN"}, ""]}] }
   },
   "Resources": {
     "VPC17230": {
@@ -309,7 +311,18 @@
         "CidrIp": "0.0.0.0/0"
       }
     },
-    "ELBSecurityGroupAllowPort80Egress": {
+    "ELBSecurityGroupAllowPort443Ingress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "SSL",
+      "Properties": {
+        "GroupId": { "Ref": "ELBSecurityGroup" },
+        "IpProtocol": "tcp",
+        "FromPort": "443",
+        "ToPort": "443",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ELBSecurityGroupAllowAllEgress": {
       "Type": "AWS::EC2::SecurityGroupEgress",
       "Properties": {
         "GroupId": { "Ref": "ELBSecurityGroup" },
@@ -457,7 +470,17 @@
             "InstancePort": "3000",
             "LoadBalancerPort": "80",
             "Protocol": "HTTP"
-          }
+          },
+          { "Fn::If": [
+            "SSL",
+            {
+              "InstancePort": "3000",
+              "LoadBalancerPort": "443",
+              "Protocol": "HTTPS",
+              "SSLCertificateId": { "Ref": "SSLCertificateARN" }
+            },
+            { "Ref": "AWS::NoValue" }
+          ]}
         ],
         "Scheme": "internet-facing",
         "HealthCheck": {
