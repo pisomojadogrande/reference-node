@@ -1,0 +1,520 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Reference for ECS service stack.  Includes internet-connected VPC; AutoScalingGroup to launch the ECS AMI, and an ECS service definition",
+  "Parameters": {
+    "ServiceInstanceKeyName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Provide an SSH Key for Autoscaling service instances (optional)"
+    },
+    "AutoScalingMaxInstances": {
+      "Type": "Number",
+      "Default": 2,
+      "Description": "Max number of instances the AutoScaling group will create (it starts with desired=0 by default)"
+    },
+    "AutoScalingStartInstances": {
+      "Type": "Number",
+      "Default": 0,
+      "Description": "Initial number of instances for the AutoScaling group to launch"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t2.micro",
+      "Description": "Instance type for cluster instances"
+    }
+  },
+  "Conditions": {
+    "AreInstancesSSHable": {
+      "Fn::Not": [{
+        "Fn::Equals": [{"Ref": "ServiceInstanceKeyName"}, ""]  
+      }]
+    }
+  },
+  "Resources": {
+    "VPC17230": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "172.30.0.0/16",
+        "InstanceTenancy": "default",
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true"
+      }
+    },
+    "SubnetD": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "172.30.2.0/24",
+        "AvailabilityZone": "us-east-1d",
+        "VpcId": {
+          "Ref": "VPC17230"
+        }
+      }
+    },
+    "SubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "172.30.0.0/24",
+        "AvailabilityZone": "us-east-1a",
+        "VpcId": {
+          "Ref": "VPC17230"
+        }
+      }
+    },
+    "SubnetC": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "172.30.1.0/24",
+        "AvailabilityZone": "us-east-1c",
+        "VpcId": {
+          "Ref": "VPC17230"
+        }
+      }
+    },
+    "IGW": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+      }
+    },
+    "DHCPOptionSet": {
+      "Type": "AWS::EC2::DHCPOptions",
+      "Properties": {
+        "DomainName": "ec2.internal",
+        "DomainNameServers": [
+          "AmazonProvidedDNS"
+        ]
+      }
+    },
+    "NACL": {
+      "Type": "AWS::EC2::NetworkAcl",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC17230"
+        }
+      }
+    },
+    "RTB": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC17230"
+        }
+      }
+    },
+    "ECSServiceInstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "For ECS service instances",
+        "VpcId": { "Ref": "VPC17230" }
+      }
+    },
+    "ELBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Port 80 open to everybody, for public Load Balancers",
+        "VpcId": { "Ref": "VPC17230" }
+      }
+    },
+    "PermissiveSSHSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "AreInstancesSSHable",
+      "Properties": {
+        "GroupDescription": "Wide-open SSH Security Group",
+        "VpcId": { "Ref": "VPC17230" }
+      }
+    },
+    "NACLIngressAllowAll": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Egress": "true",
+        "Protocol": "-1",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "NetworkAclId": {
+          "Ref": "NACL"
+        }
+      }
+    },
+    "NACLEgressAllowAll": {
+      "Type": "AWS::EC2::NetworkAclEntry",
+      "Properties": {
+        "CidrBlock": "0.0.0.0/0",
+        "Protocol": "-1",
+        "RuleAction": "allow",
+        "RuleNumber": "100",
+        "NetworkAclId": {
+          "Ref": "NACL"
+        }
+      }
+    },
+    "NACLAssociationSubnetA": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "NACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetA"
+        }
+      }
+    },
+    "NACLAssociationSubnetC": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "NACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetC"
+        }
+      }
+    },
+    "NACLAssociationSubnetD": {
+      "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties": {
+        "NetworkAclId": {
+          "Ref": "NACL"
+        },
+        "SubnetId": {
+          "Ref": "SubnetD"
+        }
+      }
+    },
+    "RTBAssociationSubnetA": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "RTB" },
+        "SubnetId": { "Ref": "SubnetA" }
+      }
+    },
+    "RTBAssociationSubnetC": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "RTB" },
+        "SubnetId": { "Ref": "SubnetC" }
+      }
+    },
+    "RTBAssociationSubnetD": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "RTB" },
+        "SubnetId": { "Ref": "SubnetD" }
+      }
+    },
+    "InternetGatewayAssociation": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC17230"
+        },
+        "InternetGatewayId": {
+          "Ref": "IGW"
+        }
+      }
+    },
+    "InternetRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "RouteTableId": {
+          "Ref": "RTB"
+        },
+        "GatewayId": {
+          "Ref": "IGW"
+        }
+      },
+      "DependsOn": "InternetGatewayAssociation"
+    },
+    "DHCPOptionSetAssociation": {
+      "Type": "AWS::EC2::VPCDHCPOptionsAssociation",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC17230"
+        },
+        "DhcpOptionsId": {
+          "Ref": "DHCPOptionSet"
+        }
+      }
+    },
+    "ECSServiceInstanceSecurityGroupAllowSelf": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ECSServiceInstanceSecurityGroup"
+        },
+        "IpProtocol": "-1",
+        "SourceSecurityGroupId": {
+          "Ref": "ECSServiceInstanceSecurityGroup"
+        },
+        "SourceSecurityGroupOwnerId": "516893983603"
+      }
+    },
+    "ECSServiceInstanceSecurityGroupAllowPort3000": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ECSServiceInstanceSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "3000",
+        "ToPort": "3000",
+        "SourceSecurityGroupId": { "Ref": "ELBSecurityGroup" }
+      }
+    },
+    "ECSServiceInstanceSecurityGroupAllowICMP": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ECSServiceInstanceSecurityGroup"
+        },
+        "IpProtocol": "icmp",
+        "FromPort": "-1",
+        "ToPort": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ECSServiceInstanceSecurityGroupAllowAllEgress": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "ECSServiceInstanceSecurityGroup"
+        },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ELBSecurityGroupAllowPort80Ingress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": { "Ref": "ELBSecurityGroup" },
+        "IpProtocol": "tcp",
+        "FromPort": "80",
+        "ToPort": "80",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "ELBSecurityGroupAllowPort80Egress": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": { "Ref": "ELBSecurityGroup" },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "PermissiveSSHSecurityGroupAllowPort22Ingress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "AreInstancesSSHable",
+      "Properties": {
+        "GroupId": { "Ref": "PermissiveSSHSecurityGroup" },
+        "IpProtocol": "tcp",
+        "FromPort": "22",
+        "ToPort": "22",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "PermissiveSSHSecurityGroupAllowAllEgress": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Condition": "AreInstancesSSHable",
+      "Properties": {
+        "GroupId": { "Ref": "PermissiveSSHSecurityGroup" },
+        "IpProtocol": "-1",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    
+    "ECSInstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": { "Service": [ "ec2.amazonaws.com" ] },
+            "Action": [ "sts:AssumeRole" ]
+          }]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+        ],
+        "Path": "/"
+      }
+    },
+    "ECSInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [ { "Ref": "ECSInstanceRole" } ]
+      }
+    },
+    
+    "ECSInstanceASG": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AvailabilityZones": [ "us-east-1a", "us-east-1c", "us-east-1d" ],
+        "Cooldown": "30",
+        "DesiredCapacity": { "Ref": "AutoScalingStartInstances" },
+        "HealthCheckGracePeriod": "50",
+        "HealthCheckType": "EC2",
+        "MaxSize": { "Ref": "AutoScalingMaxInstances" },
+        "MinSize": "0",
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "SubnetD"
+          },
+          {
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetC"
+          }
+        ],
+        "LaunchConfigurationName": {
+          "Ref": "ECSInstanceLaunchConfig"
+        },
+        "Tags": [
+          {
+            "Key": "ScalingGroup",
+            "Value": "ECSInstanceASG",
+            "PropagateAtLaunch": true
+          }
+        ],
+        "TerminationPolicies": [
+          "Default"
+        ]
+      }
+    },
+    "ECSInstanceLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "AssociatePublicIpAddress": true,
+        "ImageId": "ami-e2b1f988",
+        "InstanceType": { "Ref": "InstanceType" },
+        "KeyName": {
+          "Fn::If": [
+            "AreInstancesSSHable",
+            {"Ref": "ServiceInstanceKeyName"},
+            {"Ref": "AWS::NoValue"}
+          ]
+        },
+        "IamInstanceProfile": { "Ref": "ECSInstanceProfile" },
+        "SecurityGroups": [
+          { "Ref": "ECSServiceInstanceSecurityGroup" },
+          {
+            "Fn::If": [
+              "AreInstancesSSHable",
+              {"Ref": "PermissiveSSHSecurityGroup"},
+              {"Ref": "AWS::NoValue"}
+            ]
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [ "", [
+              "#!/bin/bash\n",
+              "echo ECS_CLUSTER=", { "Ref": "ECSCluster" }, " >> /etc/ecs/ecs.config"
+            ]]
+          }
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 30
+            }
+          }
+        ]
+      }
+    },
+    
+    
+    "LoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties": {
+        "Subnets": [
+          { "Ref": "SubnetA" },
+          { "Ref": "SubnetC" },
+          { "Ref": "SubnetD" }
+        ],
+        "SecurityGroups": [ { "Ref": "ELBSecurityGroup" } ],
+        "Listeners": [
+          {
+            "InstancePort": "3000",
+            "LoadBalancerPort": "80",
+            "Protocol": "HTTP"
+          }
+        ],
+        "Scheme": "internet-facing",
+        "HealthCheck": {
+          "HealthyThreshold": "2",
+          "Interval": "30",
+          "Target": "HTTP:3000/",
+          "Timeout": "15",
+          "UnhealthyThreshold": "5"
+        }
+      }
+    },
+    "ECSServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": { "Service": [ "ecs.amazonaws.com" ] },
+            "Action": [ "sts:AssumeRole" ]
+          }]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"
+        ],
+        "Path": "/"
+      }
+    },
+    
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster"
+    },
+    "ECSService": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "Cluster": { "Ref": "ECSCluster" },
+        "DesiredCount": { "Ref": "AutoScalingMaxInstances" },
+        "TaskDefinition": { "Ref": "ECSReferenceTaskDef" },
+        "LoadBalancers": [
+          {
+            "ContainerName": "ReferenceNodeContainer",
+            "ContainerPort": 3000,
+            "LoadBalancerName": { "Ref": "LoadBalancer" }
+          }
+        ],
+        "Role": { "Ref": "ECSServiceRole" }
+      }
+    },
+    "ECSReferenceTaskDef": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "ContainerDefinitions": [
+          {
+            "Name": "ReferenceNodeContainer",
+            "Essential": true,
+            "Image": "pisomojadogrande/reference-node",
+            "Memory": "300",
+            "PortMappings": [ { "ContainerPort": 3000, "HostPort": 3000 } ]
+          }
+        ]
+      }
+    }
+  },
+  
+  
+  "Outputs": {
+    "AutoScalingGroup": {
+      "Description": "Name of created AutoScalingGroup",
+      "Value": { "Ref": "ECSInstanceASG" }
+    },
+    "LoadBalancerDNSName": {
+      "Description": "Try this URL",
+      "Value": { "Fn::GetAtt": [ "LoadBalancer", "DNSName" ] }
+    }
+  }
+}
