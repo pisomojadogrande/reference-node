@@ -21,5 +21,14 @@ router.get('/version', function(req, res) {
   res.send(response);
 });
 
+router.get('/me', function(req, res) {
+    console.log('Headers: ' + JSON.stringify(req.headers));
+    xForwardedFor = req.headers['X-Forwarded-For'];
+    xForwardedProto = req.headers['X-Forwarded-Proto'];
+    const response = containerInfo.greetingString +
+        '; you are ' + xForwardedFor +
+        '; proto ' + xForwardedProto;
+    res.send(response);
+})
 
 module.exports = router;
