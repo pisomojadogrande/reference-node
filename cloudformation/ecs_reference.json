@@ -2,6 +2,16 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Reference for ECS service stack.  Includes internet-connected VPC; AutoScalingGroup to launch the ECS AMI, and an ECS service definition",
   "Parameters": {
+    "HostedZoneName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "If this and the DNSName parameter are set, a DNS record will be created that is a CNAME to the ELB"
+    },
+    "DNSName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "If this and the HostedZoneName parameter are set, a DNS record will be created that is a CNAME to the ELB"
+    },
     "ServiceInstanceKeyName": {
       "Type": "String",
       "Default": "",
@@ -28,6 +38,12 @@
       "Fn::Not": [{
         "Fn::Equals": [{"Ref": "ServiceInstanceKeyName"}, ""]  
       }]
+    },
+    "CreateDNSRecord": {
+      "Fn::And": [
+        { "Fn::Not": [{"Fn::Equals": [{"Ref": "HostedZoneName"}, ""]}] },
+        { "Fn::Not": [{"Fn::Equals": [{"Ref": "DNSName"}, ""]}] }
+      ]
     }
   },
   "Resources": {
@@ -470,7 +486,6 @@
         "Path": "/"
       }
     },
-    
     "ECSCluster": {
       "Type": "AWS::ECS::Cluster"
     },
@@ -478,7 +493,7 @@
       "Type": "AWS::ECS::Service",
       "Properties": {
         "Cluster": { "Ref": "ECSCluster" },
-        "DesiredCount": { "Ref": "AutoScalingMaxInstances" },
+        "DesiredCount": { "Ref": "AutoScalingStartInstances" },
         "TaskDefinition": { "Ref": "ECSReferenceTaskDef" },
         "LoadBalancers": [
           {
@@ -502,6 +517,19 @@
             "PortMappings": [ { "ContainerPort": 3000, "HostPort": 3000 } ]
           }
         ]
+      }
+    },
+    
+    "DNSRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Condition": "CreateDNSRecord",
+      "Properties": {
+        "HostedZoneName": { "Ref": "HostedZoneName" },
+        "Comment": "DNS record for reference ECS service",
+        "Name": { "Ref": "DNSName" },
+        "Type": "CNAME",
+        "TTL": "60",
+        "ResourceRecords": [{ "Fn::GetAtt": [ "LoadBalancer", "DNSName" ] }]
       }
     }
   },
